@@ -7,7 +7,7 @@ library("ActivePathways")
 library("ggbiplot")
 getwd()
 setwd("/Users/elattarsohail/Desktop/Genomic/PituitaryGland")
-clinical_data <- read_delim(file = "clinical_data.tsv", delim = "\t")
+clinical_data <- read.table("clinical_data.tsv",header=T,row.names=1)
 
 summary(clinical_data)
 
@@ -115,18 +115,13 @@ ggplot(data = clinical_data2, aes(x =death_category)) +
        x = "Classe des types de morts",
        y = "Fréquence")
 
-# Supprimer toutes les lignes contenant des valeurs manquantes
-clinical_data_clean <- na.omit(clinical_data)
-
-#normalisation des données
-datatonorm <- c("SEX", "AGE", "HGHT", "WGHT", "BMI", "TRISCHD", "DTHVNT", "DTHHRDY")
-for (i in datatonorm){
-  clinical_data_clean[[i]] <- scale(clinical_data_clean[[i]])
+#normalisation et processing des donnéese 
+clinical_data <- subset(clinical_data, !is.na(DTHVNT) & DTHVNT != 99)
+Variables <- c("SEX", "AGE", "HGHT", "WGHT", "BMI", "TRISCHD", "DTHVNT", "DTHHRDY")
+for (var in Variables) {
+  clinical_data[[var]] <- as.vector(scale(clinical_data[[var]]))
 }
 
-
-clinical_data <- subset(clinical_data, !is.na(DTHVNT) & DTHVNT != 99)
-clinical_data[numericaldata] <- lapply(clinical_data[numericaldata], scale)
 #diagrammes de densité 
 numericaldata <- c("SEX", "AGE", "HGHT", "WGHT", "BMI", "TRISCHD", "DTHVNT", "DTHHRDY")
 clinical_data_nona <- na.omit(clinical_data)
@@ -140,107 +135,39 @@ for (i in numericaldata) {
   plot(density(clinical_data_clean[[i]]), main = i)
 }
 
-#etude des correlations entre les variables 
+# Suppression des colonnes inutiles
+df <- as.data.frame.matrix(clinical_data[4:11])
+df <- subset( df, select = -SMPTHNTS )
+df
+df = df[complete.cases(df),]
+df
+# matrice de corrélation 
+c <- cor(df, method = "kendall")
 
-plot(clinical_data_clean$WGHT,clinical_data_clean$BMI) # lineaire donc correlés, logique parce que BMI correlé avec le poids 
-cor(clinical_data_clean$WGHT,clinical_data_clean$BMI) # =0,87 donc correlation positive 
+# Conversion de la matrice de corrélation en dataframe pour la rendre utilisable par ggplot
+Variable_1 <- rep(row.names(c), times=ncol(c))
+Variable_2 <- rep(colnames(c), each=nrow(c))
+value <- as.vector(c)
+df_corr <- data.frame(Variable_1, Variable_2, value)
 
-plot(clinical_data_clean$AGE,clinical_data_clean$WGHT)
-cor(clinical_data_clean$AGE,clinical_data_clean$WGHT)# -0.05679738 tres proche de 0 et graph pas  lineaire 
-
-calculate_correlation <- function(variable, categories, data) {
-  Vectcor <- numeric(length(categories))
-  
-  for (i in seq_along(categories)) {
-    cor_value <- cor(data[[variable]], data[[categories[i]]])
-    Vectcor[i] <- cor_value
-  }
-  
-  return(Vectcor)
-}
-categories <- c("SEX", "AGE", "HGHT", "WGHT", "BMI", "TRISCHD", "DTHVNT", "DTHHRDY")
-correlation_results <- list()
-
-for (var in c("SEX", "AGE", "HGHT", "WGHT", "BMI", "TRISCHD", "DTHVNT", "DTHHRDY")) {
-  correlation_results[[var]] <- calculate_correlation(var, categories, clinical_data_clean)
-}
-
-correlation_df <- as.data.frame(correlation_results)
-
-correlation_df$Variable <- rownames(correlation_df)
-correlation_df <- correlation_df[, c(ncol(correlation_df), 1:(ncol(correlation_df)-1))]
-
-rownames(correlation_df) <- NULL
-correlation_df$Variable <- c("SEX", "AGE", "HGHT", "WGHT", "BMI", "TRISCHD", "DTHVNT", "DTHHRDY")
-
-correlation_reshape <- reshape2::melt(correlation_df,id.vars = "Variable")
-correlation_reshape <- correlation_reshape[order(correlation_reshape$value, decreasing = TRUE),]
-colnames(correlation_reshape) <- c("Variable 1", "Variable 2", "Correlation")
-#ggplot sans les valeurs 
-ggplot(data = correlation_reshape, aes(x=`Variable 1`, y=`Variable 2`, fill=Correlation)) +
+# Heatmap
+ggplot(data = df_corr, aes(x=Variable_1, y=Variable_2, fill=value)) + 
   geom_tile() +
+  geom_text(aes(label=round(value, 2)), size = 3) +  
   scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
                        midpoint = 0, limit = c(-1,1), space = "Lab", 
-                       name="Pearson\nCorrelation") +
+                       name="Correlation") +
+  ggtitle("Heatmap de la corrélation entre les différentes variables") +
+  xlab("Variable 1") +
+  ylab("Variable 2") +
   theme_minimal() + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   size = 12, hjust = 1),
-        axis.text.y = element_text(size = 12)) +
-  labs(title = "Heatmap de la matrice de corrélation",
-       x = "Variable", y = "Variable", fill = "Coefficient de corrélation")
+                                   size = 12, hjust = 1))
 
-
-#ggplot avec les valeurs 
-ggplot(data = correlation_reshape, aes(x=`Variable 1`, y=`Variable 2`, fill=Correlation)) +
-  geom_tile() +
-  geom_text(aes(label = round(Correlation, 2)), color = "black", size = 4) +
-  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
-                       midpoint = 0, limit = c(-1,1), space = "Lab", 
-                       name="Pearson\nCorrelation") +
-  theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   size = 12, hjust = 1),
-        axis.text.y = element_text(size = 12)) +
-  labs(title = "Heatmap de la matrice de corrélation",
-       x = "Variable", y = "Variable", fill = "Coefficient de corrélation")
-
-#matrice de correlation basique 
-library(corrplot)
-cor_matrix <- cor(clinical_data_num_clean_norm)
-corrplot(cor_matrix)
-
-#test correlation spearman
-calculate_correlationsp <- function(variable, categories, data) {
-  Vectcorsp <- numeric(length(categories))
-  
-  for (i in seq_along(categories)) {
-    cor_valuesp <- cor.test(data[[variable]], data[[categories[i]]], method = "spearman")
-    Vectcorsp[i] <- cor_valuesp$estimate
-  }
-  
-  return(Vectcorsp)
-}
-correlationsp_results <- list()
-for (var in c("SEX", "AGE", "HGHT", "WGHT", "BMI", "TRISCHD", "DTHVNT", "DTHHRDY")) {
-  correlationsp_results[[var]] <- calculate_correlationsp(var, cathegories, clinical_data_clean)
-}
-
-correlationsp_df <- as.data.frame(correlationsp_results)
-
-clinical_data_num_clean_norm <- data.frame(
-  SEX = clinical_data_clean$SEX,
-  AGE = clinical_data_clean$AGE,
-  HGHT = clinical_data_clean$HGHT,
-  WGHT = clinical_data_clean$WGHT,
-  BMI = clinical_data_clean$BMI,
-  TRISCHD = clinical_data_clean$TRISCHD,
-  DTHVNT = clinical_data_clean$DTHVNT,
-  DTHHRDY = clinical_data_clean$DTHHRDY
-)
-PCA <- prcomp(clinical_data_num_clean_norm,center = TRUE, scale. =TRUE)
+PCA <- prcomp(clinical_data,center = TRUE, scale. =TRUE)
 
 ggbiplot(PCA, obs.scale = 1, var.scale = 1, 
-         groups = clinical_data_num_clean_norm$group, ellipse = TRUE, 
+         groups = clinical_data$group, ellipse = TRUE, 
          circle = TRUE)
 
 install.packages("factoextra")
@@ -258,7 +185,7 @@ install.packages("factoextra")
 library(FactoMineR)
 library(factoextra)
 
-res.ca <- CA(clinical_data_num_clean_norm,graph =FALSE)
+res.ca <- CA(clinical_data,graph =FALSE)
 fviz_ca_biplot(res.ca, repel = TRUE,
                title = "Carte factorielle CA",
                ggtheme = theme_minimal())

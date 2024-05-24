@@ -164,7 +164,40 @@ ggplot(data = df_corr, aes(x=Variable_1, y=Variable_2, fill=value)) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    size = 12, hjust = 1))
 
-PCA <- prcomp(clinical_data,center = TRUE, scale. =TRUE)
+library(reshape2)
+pval_matrix <- matrix(NA, ncol = ncol(df), nrow = ncol(df))
+colnames(pval_matrix) <- colnames(df)
+rownames(pval_matrix) <- colnames(df)
+
+# Calculer les p-valeurs pour chaque paire de colonnes
+for (i in 1:ncol(df)) {
+  for (j in 1:ncol(df)) {
+    if (i != j) {
+      test <- cor.test(df[, i], df[, j], method = "kendall")
+      pval_matrix[i, j] <- test$p.value
+    } else {
+      pval_matrix[i, j] <- NA  
+    }
+  }
+}
+
+pval_df <- melt(pval_matrix, na.rm = TRUE)
+
+ggplot(pval_df, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 3)), color = "black") +  # Ajouter le texte des p-valeurs
+  scale_fill_gradient(low = "blue", high = "red", name = "p-value") +
+  theme_minimal() +
+  labs(title = "Heatmap des p-valeurs des corrélations de Kendall",
+       x = "Variables",
+       y = "Variables") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+#PCA
+col_names <- colnames(clinical_data)[4:11]
+col_names <- setdiff(col_names, "SMPTHNTS")
+PCA <- prcomp(clinical_data[col_names], center= TRUE, scale. =TRUE)
 
 ggbiplot(PCA, obs.scale = 1, var.scale = 1, 
          groups = clinical_data$group, ellipse = TRUE, 
@@ -178,7 +211,6 @@ fviz_pca(PCA,
          col.ind = "blue",  # Couleur des individus
          col.var = "red"    # Couleur des variables
 )
-
 #CA ,c'est pour les variables qualitatives 
 install.packages('FactoMineR')
 install.packages("factoextra")
@@ -195,153 +227,3 @@ summary(lm(AGE~ SEX + TRISCHD, data = clinical_data_num_clean_norm ))
 summary(lm(TRISCHD ~ SEX + BMI, data = clinical_data_num_clean_norm ))
 
 GMT <- read.GMT ("c2.cp.reactome.v7.5.1.symbols.gmt")
-
-
-#test avec le type de mort
-
-install.packages("tidyverse")
-library("tidyverse")
-modele1 <- lm(HGHT ~ AGE,data=clinical_data_nona)
-modele2 <- lm( HGHT~ AGE + DTHHRDY ,data=clinical_data_nona)
-waldtest(modele1,modele2)
-
-
-
-
-# Supposons que 'ancien_tableau' est votre tableau original
-ancien_tableau <- correlation_df
-
-# Supprimer les colonnes que vous ne voulez pas
-ancien_tableau$TRISCHD <- NULL
-ancien_tableau$DTHVNT <- NULL
-ancien_tableau$DTHHRDY <- NULL
-ancien_tableau$Variable<-NULL
-ancien_tableau<-ancien_tableau[-c(6:8),]
-# Créer un nouveau tableau avec des valeurs absolues supérieures à 0,2
-nouveau_tableau <- lapply(ancien_tableau, function(x) ifelse(abs(x) > 0.2, x, NA))
-
-# Convertir la liste en un tableau
-nouveau_tableau <- as.data.frame(nouveau_tableau)
-# Supposons que 'ancien_tableau' est votre tableau original
-rownames(nouveau_tableau)[1:5] <- c("SEX", "AGE", "HGHT", "WGHT", "BMI")
-
-
-
-
-
-
-
-
-
-
-
-modele1 <- lm(HGHT ~ SEX,data=clinical_data_clean)
-# SEX -6.842e-01 
-summary(modele1)
-modele2 <- lm( HGHT~ SEX + DTHHRDY+TRISCHD+DTHVNT ,data=clinical_data_clean)
-#SEX -6.735e-01
-modele2 <- lm( HGHT~ SEX + DTHHRDY+TRISCHD ,data=clinical_data_clean)
-#SEX -6.747e-01
-modele2 <- lm( HGHT~ SEX + DTHHRDY+DTHVNT ,data=clinical_data_clean)
-#SEX  -6.730e-01
-summary(modele2)
-modele2 <- lm( HGHT~ SEX +TRISCHD+DTHVNT ,data=clinical_data_clean)
-summary(modele2)
-#SEX -6.829e-01
-modele3 <- lm( HGHT~ SEX +DTHHRDY ,data=clinical_data_clean)
-summary(modele3)
-#SEX -6.741e-01
-# Nouveau tableau avec des valeurs absolues supérieures à 0,2
-nouveau_tableau <- as.data.frame(lapply(ancien_tableau, function(x) ifelse(abs(x) > 0.2, x, NA)))
-
-rownames(nouveau_tableau)[1:5] <- c("SEX", "AGE", "HGHT", "WGHT", "BMI")
-
-# Détermination des paires variable dépendante/variable indépendantes présentant des valeurs autre que 1/NA
-# TRUE si les valeurs ne sont ni 1 ni NA, et extraction indice de TRUE si indice la ligne < indice de la colonne (pour éviter les doublons)
-paires <- nouveau_tableau != 1 & !is.na(nouveau_tableau)
-
-# Utiliser 'which' pour trouver les indices de ces valeurs si indice ligne < indice colonne (pour éviter les doublons)
-indices <- which(paires, arr.ind = TRUE)
-indices <- indices[indices[, "row"] < indices[, "col"], ]
-
-# Extraire les noms de lignes et de colonnes pour ces indices
-variable_pairs <- cbind(row.names(nouveau_tableau)[indices[, "row"]],
-                        colnames(nouveau_tableau)[indices[, "col"]])
-colnames(variable_pairs) <- c("var_dep", "var_indep")
-
-# Afficher les paires de variables
-print(variable_pairs)
-
-# Regression linéaire pour mettre en évidence les possibles variables techniques confondantes
-res_conf <- data.frame(matrix(ncol = 10, nrow = nrow(variable_pairs)))
-colnames(res_conf) <- c("var_dep", "var_indep", "Corr", 
-                        "DTHHRDY + TRISCHD + DTHVNT", "DTHHRDY + TRISCHD", 
-                        "DTHHRDY + DTHVNT", "TRISCHD + DTHVNT", "DTHVNT", 
-                        "TRISCHD", "DTHHRDY")
-
-poss_conf_v1 <- "DTHHRDY + TRISCHD + DTHVNT"
-poss_conf_v2 <- "DTHHRDY + TRISCHD"
-poss_conf_v3 <- "DTHHRDY + DTHVNT"
-poss_conf_v4 <- "TRISCHD + DTHVNT"
-
-# Vérifiez d'abord les noms de colonnes de variable_pairs
-if (!all(c("var_dep", "var_indep") %in% colnames(variable_pairs))) {
-  stop("Les colonnes 'var_dep' et 'var_indep' doivent être présentes dans 'variable_pairs'")
-}
-
-# Vérifiez ensuite les noms de colonnes de res_conf
-required_cols <- c("var_dep", "var_indep", "Corr", 
-                   "DTHHRDY + TRISCHD + DTHVNT", "DTHHRDY + TRISCHD", 
-                   "DTHHRDY + DTHVNT", "TRISCHD + DTHVNT", "DTHVNT", 
-                   "TRISCHD", "DTHHRDY")
-if (!all(required_cols %in% colnames(res_conf))) {
-  stop(paste("Les colonnes suivantes doivent être présentes dans 'res_conf':", paste(required_cols, collapse = ", ")))
-}
-
-
-
-
-
-
-for(i in 1:nrow(variable_pairs)){
-  var_dep <- variable_pairs[i, "var_dep"]
-  var_indep <- variable_pairs[i, "var_indep"]
-  print(var_dep)
-  print(var_indep)
-  # Ajout des variables dans tableau des résultats
-  res_conf[i, "var_dep"] <- var_dep
-  res_conf[i, "var_indep"] <- var_indep
-  
-  # Régressions
-  modele1 <- lm(as.formula(paste(var_dep, "~", var_indep)),data=clinical_data_clean)
-  res_conf[i, "Corr"] <- coef(modele1)[var_indep]
-  
-  modele2 <- lm(as.formula(paste(var_dep, "~", var_indep, "+", poss_conf_v1)),data=clinical_data_clean)
-  res_conf[i, poss_conf_v1] <- coef(modele2)[var_indep]
-  
-  modele2 <- lm(as.formula(paste(var_dep, "~", var_indep, "+", poss_conf_v2)),data=clinical_data_clean)
-  res_conf[i, poss_conf_v2] <- coef(modele2)[var_indep]
-  
-  modele2 <- lm(as.formula(paste(var_dep, "~", var_indep, "+", poss_conf_v3)),data=clinical_data_clean)
-  res_conf[i, poss_conf_v3] <- coef(modele2)[var_indep]
-  
-  modele2 <- lm(as.formula(paste(var_dep, "~", var_indep, "+", poss_conf_v4)),data=clinical_data_clean)
-  res_conf[i, poss_conf_v4] <- coef(modele2)[var_indep]
-  
-  # Détermination de la différence de coefficient de la variable indépendante due au retrait de chacune des variables techniques, et du max
-  res_conf[i, "DTHHRDY + TRISCHD"] <- abs(res_conf[i, "DTHHRDY + TRISCHD"] - res_conf[i, "DTHHRDY + TRISCHD + DTHVNT"])
-  res_conf[i, "DTHHRDY + DTHVNT"] <- abs(res_conf[i, "DTHHRDY + DTHVNT"] - res_conf[i, "DTHHRDY + TRISCHD + DTHVNT"])
-  res_conf[i, "TRISCHD + DTHVNT"] <- abs(res_conf[i, "TRISCHD + DTHVNT"] - res_conf[i, "DTHHRDY + TRISCHD + DTHVNT"])
-  max_conf <- which.max(c(res_conf[i, "DTHHRDY + TRISCHD"], res_conf[i, "DTHHRDY + DTHVNT"], res_conf[i, "TRISCHD + DTHVNT"])) + 3
-  
-  # Nouveau modèle avec seulement le max en possible confondant, si la différence de coeff est >10% -> TRUE
-  modele3 <- lm(as.formula(paste(var_dep, "~", var_indep, "+", colnames(res_conf)[max_conf])),data=clinical_data_clean)
-  res <- 1 - (abs(coef(modele3)[var_indep]-res_conf[i, "Corr"])/(res_conf[i, "Corr"])*100)
-  
-  if(res >= 0.1){
-    res_conf[i, colnames(res_conf)[max_conf+3]] <- "OUI"
-  }
-}
-
-res_conf
-

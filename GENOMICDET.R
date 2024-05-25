@@ -224,19 +224,4 @@ fviz_pca(PCA,
          col.ind = "blue",  # Couleur des individus
          col.var = "red"    # Couleur des variables
 )
-#CA ,c'est pour les variables qualitatives 
-install.packages('FactoMineR')
-install.packages("factoextra")
-library(FactoMineR)
-library(factoextra)
 
-res.ca <- CA(clinical_data,graph =FALSE)
-fviz_ca_biplot(res.ca, repel = TRUE,
-               title = "Carte factorielle CA",
-               ggtheme = theme_minimal())
-
-summary(lm(BMI ~ WGHT + HGHT, data = clinical_data_num_clean_norm ))
-summary(lm(AGE~ SEX + TRISCHD, data = clinical_data_num_clean_norm ))
-summary(lm(TRISCHD ~ SEX + BMI, data = clinical_data_num_clean_norm ))
-
-GMT <- read.GMT ("c2.cp.reactome.v7.5.1.symbols.gmt")

@@ -193,6 +193,19 @@ ggplot(pval_df, aes(Var1, Var2, fill = value)) +
        y = "Variables") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+colnames(pval_df) <- c("Variable_1", "Variable_2", "value")
+
+merged_df <- merge(df_corr, pval_df, by = c("Variable_1", "Variable_2"))
+filtered_merged_df <- merged_df[abs(merged_df$value.x) > 0.1, ]
+colnames(filtered_merged_df) <- c("Variable_1", "Variable_2", "Corr","P-val")
+subset_df <- filtered_merged_df[filtered_merged_df$"P-val" > 0.05, ]
+
+install.packages("xtable")
+library(xtable)
+xtable_df <- xtable(filtered_merged_df)
+
+print(xtable_df)
+
 
 #PCA
 col_names <- colnames(clinical_data)[4:11]

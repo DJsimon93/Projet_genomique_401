@@ -35,7 +35,7 @@ morph_counts
 
 pathways <- gmtPathways("./PituitaryGland/c2.cp.reactome.v7.5.1.symbols.gmt")
 
-all(colnames(rna_counts) == rownames(morph_counts))
+
 
 head(morph_counts)
 head(rna_counts)
@@ -56,6 +56,7 @@ rna_counts <- filter_low(rna_counts)
 gene_symbols <- rna_counts$Description
 
 f_rna_counts <- rna_counts[-1]
+all(colnames(f_rna_counts) == rownames(morph_counts))
 
 # Convert Gene names 
 convert_gene_ids <- function(gene_ids, mapping) {
@@ -107,14 +108,15 @@ fgsea_list
 final_results <- lapply(results_list, function(res) {
   res <- na.omit(res)
   significant_genes <- res[res$padj < 0.05, ]
-  top_ten_genes <- head(significant_genes[order(significant_genes$padj, decreasing = TRUE), ], 10)
+  top_ten_genes <- head(significant_genes[order(significant_genes$log2FoldChange, decreasing = TRUE), ], 10)
   list(
     Number_of_Significant_Genes = nrow(significant_genes),
-    Top_Ten_Genes = rownames(top_ten_genes)
+    Top_Ten_Genes = rownames(top_ten_genes),
+    P_value_adjusted = top_ten_genes$padj
   )
 })
 final_results_df <- do.call(rbind, final_results)
-write.csv(final_results_df, file = "differential_expression_report_3.1.csv")
+write.csv(final_results_df, file = "differential_expression_report_Q3.1.csv")
 
 
 
@@ -126,12 +128,17 @@ final_fgsea <- lapply(fgsea_list, function(fgsea_res) {
   
   list(
     Number_of_Significant_Pathways = nrow(significant_pathways),
-    Top_Ten_Pathways = top_ten_pathways$pathway
+    Top_Ten_Pathways = top_ten_pathways$pathway,
+    P_value_adjusted = top_ten_pathways$padj
   )
 })
 
 final_fgsea_df <- do.call(rbind, final_fgsea)
-write.csv(final_fgsea_df, file = "reactome_expression_report_3.2.csv")
+write.csv(final_fgsea_df, file = "reactome_expression_report_Q3.2.csv")
+
+
+# Heatmap of the diff analysis counts
+pheatmap(res$log2FoldChange,cluster_rows = T, cluster_cols = T,show_rownames = T,show_colnames = T)
 
 
 
